@@ -4,7 +4,7 @@ The split is chronological (no shuffling) so that no future information leaks
 into training. Run once and commit the outputs so everyone trains, tunes and
 evaluates on exactly the same data:
 
-    python data/split_data.py
+    python data/yahoo/split_data.py
 
 Uses only the standard library; rows are copied verbatim from the source file.
 """
