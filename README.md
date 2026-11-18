@@ -59,7 +59,7 @@ Use `data/alpaca/` for all SPY model fitting, forecasting, and evaluation.
 
 Each folder contains `daily_inputs.csv` and `actuals.csv`. Validation and test also contain `forecast_schedule.csv`, with one row per requested `origin_date,horizon`. Submit forecasts against the schedule for that phase.
 
-For a model trained directly on forward labels, join `train/daily_inputs.csv` to nonblank labels for your horizon in `train/actuals.csv`, matching `date` to `origin_date`. A training label is blank when its window ends after the training cutoff or contains a missing variance. The last 22 input sessions in each evaluation phase provide outcomes for earlier forecast origins. The schedule retains earlier origins whose outcome windows encounter data gaps. [Data sources and gaps](data/alpaca/data_quality.md)
+For a model trained directly on forward labels, join `train/daily_inputs.csv` to nonblank labels for your horizon in `train/actuals.csv`, matching `date` to `origin_date`. Training labels are blank where the outcome window extends past the training cutoff. The last 22 input sessions in each evaluation phase provide outcomes for earlier forecast origins. [Data sources and gaps](data/alpaca/data_quality.md)
 
 ## 3. Know your inputs and target
 
@@ -75,6 +75,8 @@ Each row is one SPY trading session on the New York calendar.
 | `vix_close` | Cboe VIX closing level as quoted. It measures option-implied S&P 500 volatility over roughly 30 days, expressed as an annualized percentage level |
 
 Daily realized variance starts with the first bar’s opening price $P_{t,0}$ and uses successive five-minute closes through the actual session close. Sum the squared log returns. A normal session contributes 78 returns, including the opening-to-first-close return. Early closes use the shorter exchange schedule, and overnight changes are excluded.
+
+An empty interior five-minute slot fully covered by a verified market-wide halt contributes zero return and volume. The next observed close still captures the price change across the halt. Daily OHLCV uses observed trades. For the two sessions with feed gaps, complete SPY OHLCV is unavailable and `spy_rv` uses the wider-return estimates described below. [NYSE halt records](https://www.nyse.com/publicdocs/nyse/markets/nyse/Report_of_the_Market-Wide_Circuit_Breaker_Working_Group.pdf) · [Data quality](data/alpaca/data_quality.md)
 
 $$
 RV_t = \sum_{j=1}^{m_t}\left[\log(P_{t,j}/P_{t,j-1})\right]^2.
@@ -104,6 +106,15 @@ For each forecast origin, follow this sequence.
 2. **Build features from the trading calendar through the origin.** Carry prior input rows across split boundaries for lookback. Common starters are current `spy_rv`, a one-session lag, and trailing 5- and 22-session averages. Document the lookback and missing-value rule. Fit scalers, imputers, feature selection, and other learned preprocessing using data available at the cutoff.
 3. **Restrict supervised fitting to matured targets.** A historical label with horizon $h$ becomes usable once its $h$-th subsequent SPY session has finished and the observations are available. With `pos` mapping dates to positions in the full trading calendar, require `pos[label_origin] + h <= pos[current_origin]` and a nonblank target. Use this filter on any phase’s `actuals.csv` before refitting. If your refit needs labels near a split boundary or outside a forecast schedule, apply the target formula above to the concatenated `spy_rv` series through the current origin, using complete outcome windows. Keep `actual` and `baseline` out of the feature matrix.
 4. **Predict and advance.** Produce a mean forecast for each requested horizon. A direct model can fit one model per horizon or a joint model. A recursive daily variance model can fit to the observed series through the origin, forecast the next $h$ daily variances, and average those forecasts. Generate validation forecasts in origin order. Before the final test, freeze the selected hyperparameters, missing-data rules, and update policy. A rolling or expanding refit during the test can use earlier outcomes as they mature when the policy specifies it.
+
+### Variance estimates for two training gaps
+
+The training data includes `spy_rv` for every session. For the two dates below, the estimate sums squared log returns from the session open to the close, with one wider return spanning the feed gap. Price moves inside that wider interval can reverse or reinforce each other, so the estimate can differ from five-minute realized variance.
+
+- **2016-02-02.** The estimate uses the 10-minute return between the observed Alpaca closes at 11:20 and 11:30 New York time. Its availability date is February 2.
+- **2019-08-12.** The estimate uses the 25-minute return from the last Alpaca bar close at 15:35 to the official NYSE Arca close of $288.07 at 16:00. Its conservative availability date is August 14, following Nasdaq’s August 13 update. [NYSE closing prices](https://www.nyse.com/publicdocs/nyse/notifications/market-status/NYSE_Group_Closing_Prices_08122019.xlsx) · [Nasdaq incident update](https://www.nasdaqtrader.com/TraderNews.aspx?id=nfnnews2019-01)
+
+Training target and baseline windows include these estimates where applicable. If you simulate an earlier cutoff within training, use each estimate and any feature or label derived from it only from its availability date onward. Validation and test scoring use measured variance.
 
 ## 5. Export and hand off your forecasts
 
