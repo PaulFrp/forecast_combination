@@ -55,7 +55,7 @@ Use `data/alpaca/` for all SPY model fitting, forecasting, and evaluation.
 |---|---|---:|---:|---|
 | [`train/`](data/alpaca/train/) | 2016-01-04 to 2020-12-31 | 1,259 | — | Fit the initial model |
 | [`validation/`](data/alpaca/validation/) | 2021-01-04 to 2022-12-30 | 503 | 481 | Tune models and learn combination weights from walk-forward forecasts |
-| [`test/`](data/alpaca/test/) | 2023-01-03 to 2025-12-31 | 752 | 730 | Evaluate the selected models and combination rules |
+| [`test/`](data/alpaca/test/) | 2023-01-03 to 2026-11-13 | 971 | 949 | Evaluate the selected models and combination rules |
 
 Each folder contains `daily_inputs.csv` and `actuals.csv`. Validation and test also contain `forecast_schedule.csv`, with one row per requested `origin_date,horizon`. Submit forecasts against the schedule for that phase.
 
