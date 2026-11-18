@@ -12,12 +12,13 @@ Calendar sessions: 2733 (2016-01-04 through 2026-11-13)
 SPY bars: 501259 input rows; 212404 checked within 2016-01-01 through 2026-11-13
 Extended-hours SPY bars removed at request: 288855
 VIX rows: 9317; dates 1990-01-02 through 2026-11-16
+SPY OHLCV coverage: 2733 sessions (2731 using regular-session five-minute bars, 2 using Alpaca daily bars)
 SPY variance coverage: 2733 sessions (2731 based on observed five-minute bars and verified halts, 2 estimated)
 VIX close coverage: 2733 sessions
 Off-calendar SPY bar dates inside data window: none
 
-Incomplete SPY bar coverage (2)
-- 2016-02-02 (1 missing bars)
+Incomplete SPY five-minute bar coverage (2)
+- 2016-02-02 (1 missing bar)
 - 2019-08-12 (5 missing bars)
 
 Missing VIX session dates (0)
@@ -33,13 +34,16 @@ Empty interior slots fully covered by a halt contribute zero return and zero vol
 - 2020-03-16: 09:30:01–09:45:01 ET, empty bar starts 09:35, 09:40 ET. [Source](https://www.nyse.com/publicdocs/nyse/markets/nyse/Report_of_the_Market-Wide_Circuit_Breaker_Working_Group.pdf)
 - 2020-03-18: 12:56:17–13:11:17 ET, empty bar starts 13:00, 13:05 ET. [Source](https://www.nyse.com/publicdocs/nyse/markets/nyse/Report_of_the_Market-Wide_Circuit_Breaker_Working_Group.pdf)
 
-## Estimated training variances
+## Training sessions with feed gaps
 
-Both dates have a variance estimate in the daily inputs. Their complete SPY OHLCV fields remain blank.
-Training target and baseline windows use these estimates. Validation and test labels use observed variance.
+For both dates, all five OHLCV fields come from the Alpaca Historical Bars API with `timeframe=1Day`, `feed=sip`, and `adjustment=raw`. The API aggregates by New York calendar day. Prices and volume can reflect trades outside the regular session. [Alpaca Historical Bars API](https://docs.alpaca.markets/us/reference/stockbars) · [Alpaca bar aggregation](https://docs.alpaca.markets/us/docs/market-data-faq)
+
+Training target and baseline windows use the variance estimates below. Validation and test labels use observed variance.
 
 - 2016-02-02 uses a 10-minute return from 11:20 to 11:30 ET. Availability date is 2016-02-02.
-- 2019-08-12 uses a 25-minute return from 15:35 ET to the official NYSE Arca close of $288.07 at 16:00 ET. The conservative availability date is 2019-08-14, following Nasdaq’s August 13 update. [NYSE closing prices](https://www.nyse.com/publicdocs/nyse/notifications/market-status/NYSE_Group_Closing_Prices_08122019.xlsx) · [Nasdaq incident update](https://www.nasdaqtrader.com/TraderNews.aspx?id=nfnnews2019-01)
+- 2019-08-12 uses a 25-minute return from 15:35 ET to the official NYSE Arca close of $288.07 at 16:00 ET. Alpaca’s daily `spy_close` is $287.93. The estimate’s conservative availability date is 2019-08-14, following Nasdaq’s August 13 update. [NYSE closing prices](https://www.nyse.com/publicdocs/nyse/notifications/market-status/NYSE_Group_Closing_Prices_08122019.xlsx) · [Nasdaq incident update](https://www.nasdaqtrader.com/TraderNews.aspx?id=nfnnews2019-01)
+
+## Label coverage
 
 1-session horizon. Scheduled origins: 2733
 - Missing actual (1): 2026-11-13
