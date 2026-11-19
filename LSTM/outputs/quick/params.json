@@ -1,0 +1,39 @@
+{
+  "params": {
+    "1": {
+      "window": 22,
+      "units": 16,
+      "dropout": 0.2,
+      "lr": 0.001
+    },
+    "5": {
+      "window": 22,
+      "units": 16,
+      "dropout": 0.2,
+      "lr": 0.001
+    },
+    "22": {
+      "window": 22,
+      "units": 16,
+      "dropout": 0.2,
+      "lr": 0.001
+    }
+  },
+  "seeds": [
+    0
+  ],
+  "scheme": "static",
+  "refit_freq": null,
+  "features": [
+    "har_d",
+    "har_w",
+    "har_m",
+    "ret_1",
+    "neg_ret_1",
+    "ret_5",
+    "log_volume",
+    "log_vix"
+  ],
+  "export_unit": "variance",
+  "annualized": false
+}
