@@ -37,7 +37,7 @@ $$
 | `rv_w` | mean of `spy_rv` over t−4 … t | 5 sessions |
 | `rv_m` | mean of `spy_rv` over t−21 … t | 22 sessions |
 
-- Only `spy_rv` is used. No VIX (team decision), no OHLCV, no `actual`/`baseline` columns.
+- Only `spy_rv` is used. No VIX, no OHLCV, no `actual`/`baseline` columns.
 - Features are built on one continuous calendar (train + validation + test `daily_inputs.csv`), so lookbacks carry across split boundaries. A feature row is used only if all three windows are complete; `spy_rv` has no gaps in the Alpaca data, so this only drops the first 21 sessions of 2016.
 - Predictions are in unannualized daily variance units. The model is fit in levels, so **no log-variance conversion** is applied.
 
