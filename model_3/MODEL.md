@@ -19,8 +19,10 @@ Score with the shared report:
 python -m pipeline.report --schedule data/alpaca/<phase>/forecast_schedule.csv \
   --actuals data/alpaca/<phase>/actuals.csv \
   --forecasts forecasts/<phase>/har_rv.csv --selected-id har_rv \
-  --output reports/preview/har_rv/<phase>
+  --output model_3/results/<phase>
 ```
+
+Running `explore.ipynb` top to bottom regenerates everything in `model_3/results/` (the same report, plus the log-scale and in-sample plots).
 
 ## Model
 
@@ -87,3 +89,7 @@ Leakage check: for 25 random validation origins, re-running the walk-forward on 
 | `har_rv.py` | Walk-forward forecasting and CSV export (the submission code) |
 | `explore.ipynb` | Steps 1–3: target/baseline checks against `actuals.csv`, export plumbing check, in-sample fit with HAC t-stats and pre-COVID sensitivity |
 | `requirements.txt` | `statsmodels` for the notebook only |
+| `results/<phase>/report.md`, `scores.csv`, `coverage.csv` | Shared-report RMSE table and coverage for validation and test |
+| `results/<phase>/forecasts.png` | Shared-report forecast plot (linear scale) |
+| `results/<phase>/forecasts_log.png` | Same plot on a log scale; calm periods readable |
+| `results/train_insample_fit.png` | Step 3 in-sample fit on train (log scale) |
