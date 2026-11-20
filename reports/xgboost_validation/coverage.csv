@@ -1,0 +1,7 @@
+method,kind,horizon,scheduled,scored,missing_actuals,missing_predictions
+xgboost,forecast,1,481,481,0,0
+Baseline,baseline,1,481,481,0,0
+xgboost,forecast,5,481,481,0,0
+Baseline,baseline,5,481,481,0,0
+xgboost,forecast,22,481,481,0,0
+Baseline,baseline,22,481,481,0,0
