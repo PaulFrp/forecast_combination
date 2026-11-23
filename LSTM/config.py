@@ -13,37 +13,34 @@ ROOT_DIR = LSTM_DIR.parent
 DATA_DIR = ROOT_DIR / "data"
 OUTPUT_DIR = LSTM_DIR / "outputs"
 
-FULL_DATA = DATA_DIR / "sp500_20y_daily.csv"
-# The group's split files: only their *date ranges* are used, so that our
-# train / validation / test periods match everyone else's exactly.
-SPLIT_FILES = {
-    "train": DATA_DIR / "sp500_train.csv",
-    "val": DATA_DIR / "sp500_val.csv",
-    "test": DATA_DIR / "sp500_test.csv",
-}
-VIX_CACHE = DATA_DIR / "vix_daily.csv"   # downloaded once, then reused
-VIX_TICKER = "^VIX"
+ALPACA_DIR = DATA_DIR / "alpaca"
+# The group's Alpaca snapshot: one folder per phase, each with daily_inputs.csv
+# and actuals.csv (validation / test also have forecast_schedule.csv).
+PHASES = {"train": "train", "val": "validation", "test": "test"}
+PHASE_DIRS = {k: ALPACA_DIR / v for k, v in PHASES.items()}
+
+# Submission files for the group (only written in full mode).
+FORECASTS_DIR = ROOT_DIR / "forecasts"
 
 # --------------------------------------------------------------------------- #
 # Target / forecast contract
 # --------------------------------------------------------------------------- #
 HORIZONS = [1, 5, 22]
 MODEL_NAME = "LSTM"
+MODEL_ID = "lstm"           # model_id column of the submission CSVs
 
-# Units of the exported forecast. Change these if the group agrees otherwise.
-#   "variance"   -> Garman-Klass daily variance (average over the next h days)
-#   "volatility" -> sqrt of the above
-EXPORT_UNIT = "variance"
-ANNUALIZE = False          # if True: variance * 252  (volatility * sqrt(252))
-TRADING_DAYS = 252
-
-# Floor applied to GK variance before taking logs (a few days have H == L).
-GK_FLOOR = 1e-8
+# Target (group contract): average daily realized variance `spy_rv` over the
+# h sessions *after* the origin, in unannualized variance units.
+# Floor applied to RV before taking logs.
+RV_FLOOR = 1e-10
 
 # --------------------------------------------------------------------------- #
-# Features (all lagged by one day inside features.py)
+# Features (information through the origin session, see features.py)
 # --------------------------------------------------------------------------- #
-USE_VIX = True             # silently disabled if VIX cannot be downloaded
+USE_VIX = True
+# Sessions by which vix_close is lagged. The Cboe history has no as-of
+# timestamps, so (like the Timestral runs) we only use the previous session's close.
+VIX_LAG = 1
 HAR_WINDOWS = {"har_d": 1, "har_w": 5, "har_m": 22}
 
 # --------------------------------------------------------------------------- #

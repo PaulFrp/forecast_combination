@@ -1,70 +1,53 @@
-"""Load prices, compute Garman-Klass variance, fetch VIX, read the group split."""
-import warnings
+"""Load the group's Alpaca snapshot (SPY daily inputs, actuals, schedules)."""
+import sys
 
-import numpy as np
 import pandas as pd
 
 import config
 
+# The shared CSV reader/validator lives in <root>/pipeline.
+if str(config.ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(config.ROOT_DIR))
+from pipeline.csv_io import ACTUALS, DAILY, FORECAST, KEY, export, load  # noqa: E402,F401
 
-def load_prices() -> pd.DataFrame:
-    """Daily S&P 500 OHLCV indexed by date, sorted, incomplete rows dropped."""
-    df = pd.read_csv(config.FULL_DATA, parse_dates=["Date"], index_col="Date")
-    df = df.sort_index().dropna()
-    df = df[(df[["Open", "High", "Low", "Close"]] > 0).all(axis=1)]
+
+def load_daily() -> pd.DataFrame:
+    """train + validation + test daily_inputs.csv, one row per SPY session,
+    indexed by date. Kept on the full calendar so lookbacks cross phase boundaries."""
+    frames = [load(d / "daily_inputs.csv", DAILY) for d in config.PHASE_DIRS.values()]
+    df = pd.concat(frames, ignore_index=True)
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date").sort_index()
+    assert df.index.is_unique, "overlapping phases in daily_inputs.csv"
     return df
 
 
-def garman_klass_variance(df: pd.DataFrame) -> pd.Series:
-    """Daily Garman-Klass (1980) variance estimator.
-
-    sigma^2 = 0.5 * ln(H/L)^2 - (2 ln 2 - 1) * ln(C/O)^2
-    Floored at config.GK_FLOOR so that logs are always defined.
-    """
-    hl = np.log(df["High"] / df["Low"])
-    co = np.log(df["Close"] / df["Open"])
-    gk = 0.5 * hl**2 - (2 * np.log(2) - 1) * co**2
-    return gk.clip(lower=config.GK_FLOOR).rename("gk_var")
-
-
-def load_vix(index: pd.DatetimeIndex) -> pd.Series | None:
-    """VIX close aligned on `index` (forward-filled). Downloaded once and cached
-    in data/vix_daily.csv so every later run is offline and reproducible."""
-    if not config.VIX_CACHE.exists():
-        try:
-            import yfinance as yf
-            raw = yf.download(config.VIX_TICKER, start=index.min() - pd.Timedelta(days=10),
-                              end=index.max() + pd.Timedelta(days=2),
-                              auto_adjust=False, progress=False)
-            raw.columns = raw.columns.get_level_values(0)
-            if raw.empty:
-                raise RuntimeError("empty download")
-            raw[["Close"]].rename(columns={"Close": "VIX"}).to_csv(config.VIX_CACHE)
-        except Exception as exc:  # no internet, yfinance missing, ...
-            warnings.warn(f"Could not download VIX ({exc}); continuing without it.")
-            return None
-    vix = pd.read_csv(config.VIX_CACHE, parse_dates=["Date"], index_col="Date")["VIX"]
-    vix = vix[~vix.index.duplicated()].sort_index()
-    return vix.reindex(index).ffill().rename("vix")
-
-
 def load_split_dates() -> dict[str, tuple[pd.Timestamp, pd.Timestamp]]:
-    """(first_date, last_date) of each group split file."""
+    """(first_session, last_session) of each phase."""
     out = {}
-    for name, path in config.SPLIT_FILES.items():
-        dates = pd.read_csv(path, usecols=["Date"], parse_dates=["Date"])["Date"]
+    for name, d in config.PHASE_DIRS.items():
+        dates = pd.to_datetime(pd.read_csv(d / "daily_inputs.csv", usecols=["date"])["date"])
         out[name] = (dates.min(), dates.max())
-    # Sanity: chronological and non-overlapping.
     assert out["train"][1] < out["val"][0] <= out["val"][1] < out["test"][0], out
     return out
 
 
+def load_schedule(phase: str) -> pd.DataFrame:
+    """origin_date (Timestamp), horizon for a phase with a forecast schedule."""
+    s = load(config.PHASE_DIRS[phase] / "forecast_schedule.csv", KEY)
+    s["origin_date"] = pd.to_datetime(s["origin_date"])
+    return s
+
+
+def load_actuals(phase: str) -> pd.DataFrame:
+    """origin_date, horizon, actual, baseline (blank -> NaN)."""
+    a = load(config.PHASE_DIRS[phase] / "actuals.csv", ACTUALS)
+    a["origin_date"] = pd.to_datetime(a["origin_date"])
+    for c in ("actual", "baseline"):
+        a[c] = pd.to_numeric(a[c].replace("", float("nan")))
+    return a
+
+
 def load_all() -> tuple[pd.DataFrame, dict]:
-    """Prices + gk_var (+ vix) in one frame, and the split date ranges."""
-    df = load_prices()
-    df["gk_var"] = garman_klass_variance(df)
-    if config.USE_VIX:
-        vix = load_vix(df.index)
-        if vix is not None:
-            df["vix"] = vix
-    return df, load_split_dates()
+    """Daily inputs on the full calendar, and the phase date ranges."""
+    return load_daily(), load_split_dates()

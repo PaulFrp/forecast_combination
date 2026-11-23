@@ -19,6 +19,11 @@
       "lr": 0.001
     }
   },
+  "refit_epochs": {
+    "1": 16,
+    "5": 14,
+    "22": 14
+  },
   "seeds": [
     0
   ],
@@ -34,6 +39,6 @@
     "log_volume",
     "log_vix"
   ],
-  "export_unit": "variance",
-  "annualized": false
+  "vix_lag": 1,
+  "bias_correction": true
 }

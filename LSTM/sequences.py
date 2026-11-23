@@ -1,12 +1,12 @@
 """Scaling and sliding windows (step 3).
 
 Samples are identified by their *position* in the feature frame. A sample at
-position i (date t) sees the feature rows i-window+1 .. i, all of which only use
-data up to t-1, and predicts target_h at row i.
+position i (origin t) sees the feature rows i-window+1 .. i, all of which only
+use data through session t, and predicts target_h at row i.
 
-Purging: a training sample's target covers days t .. t+h-1. If that window
-reaches past the end of the training period it would leak future (validation
-or test) data into training, so such samples are dropped.
+Matured labels: a sample's target covers sessions t+1 .. t+h. At a fitting
+cutoff c (an origin date, 17:00 New York) the label is usable only if t+h <= c,
+i.e. pos[t] + h <= pos[c] in the trading calendar (group README, step 4).
 """
 from dataclasses import dataclass
 
@@ -33,19 +33,20 @@ class Scaler:
 
 
 def target_end_dates(index: pd.DatetimeIndex, h: int) -> pd.Series:
-    """Date of the last day covered by the h-day target on each row (NaT at the end)."""
+    """Last session covered by the h-session target on each row (NaT at the end)."""
     s = pd.Series(index, index=index)
-    return s.shift(-(h - 1))
+    return s.shift(-h)
 
 
 def select_samples(data: pd.DataFrame, h: int, window: int, start=None, end=None,
-                   known_before=None, require_target=True) -> np.ndarray:
+                   known_through=None, require_target=True, origins=None) -> np.ndarray:
     """Positions of usable samples.
 
-    start / end      : keep samples whose date t is in [start, end]
-    known_before     : keep only samples whose whole target window ends strictly
-                       before this date (purging / "data available at refit time")
+    start / end      : keep samples whose origin t is in [start, end]
+    known_through    : keep only samples whose whole target window ends on or
+                       before this session (labels matured at that cutoff)
     require_target   : drop samples whose target is NaN
+    origins          : keep only these dates (e.g. a phase's forecast schedule)
     """
     idx = data.index
     ok = np.arange(len(idx)) >= window - 1           # enough history for a window
@@ -53,9 +54,11 @@ def select_samples(data: pd.DataFrame, h: int, window: int, start=None, end=None
         ok &= idx >= start
     if end is not None:
         ok &= idx <= end
-    if known_before is not None:
+    if known_through is not None:
         ends = target_end_dates(idx, h)
-        ok &= (ends < known_before).to_numpy()       # NaT compares False -> dropped
+        ok &= (ends <= known_through).to_numpy()     # NaT compares False -> dropped
+    if origins is not None:
+        ok &= idx.isin(pd.DatetimeIndex(origins))
     if require_target:
         ok &= data[f"target_{h}"].notna().to_numpy()
     return np.flatnonzero(ok)
@@ -93,14 +96,14 @@ def prepare(data: pd.DataFrame, feature_cols: list[str], h: int,
 
 
 def split_positions(data: pd.DataFrame, h: int, window: int, splits: dict) -> dict[str, np.ndarray]:
-    """Train / val / test sample positions for horizon h, using the group's dates.
+    """Train / val sample positions for the initial fit (early stopping, tuning).
 
-    train and val are purged (their targets end before the next period starts);
-    test keeps every test date, including the last ones whose target is not
-    observed yet (they are forecast and exported, just not evaluated)."""
-    (_, tr_end), (va_start, va_end), (te_start, te_end) = splits["train"], splits["val"], splits["test"]
+    train: training origins whose label matured by the last training session
+           (= the nonblank labels of train/actuals.csv);
+    val  : validation origins whose label matured by the last validation session
+           (= the validation schedule)."""
+    (_, tr_end), (va_start, va_end) = splits["train"], splits["val"]
     return {
-        "train": select_samples(data, h, window, end=tr_end, known_before=va_start),
-        "val": select_samples(data, h, window, start=va_start, end=va_end, known_before=te_start),
-        "test": select_samples(data, h, window, start=te_start, end=te_end, require_target=False),
+        "train": select_samples(data, h, window, end=tr_end, known_through=tr_end),
+        "val": select_samples(data, h, window, start=va_start, end=va_end, known_through=va_end),
     }

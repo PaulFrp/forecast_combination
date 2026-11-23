@@ -34,15 +34,15 @@ def forecasts_figure(results, path):
     for ax, h in zip(axes[:, 0], hs):
         d = results[h]["detail"]
         _shade(ax, d["crisis"])
-        ax.plot(d.index, d["realized"], color=COLORS["realized"], lw=0.8, label="Realised (GK)")
+        ax.plot(d.index, d["realized"], color=COLORS["realized"], lw=0.8, label="Realised RV")
         ax.plot(d.index, d["HAR"], color=COLORS["HAR"], lw=1.5, label="HAR")
         ax.plot(d.index, d["LSTM"], color=COLORS["LSTM"], lw=1.5, label="LSTM")
         ax.set_yscale("log")
-        ax.set_title(f"h = {h} day{'s' if h > 1 else ''}: average daily variance, test period",
+        ax.set_title(f"h = {h} day{'s' if h > 1 else ''}: average daily realized variance, test origins",
                      loc="left", color=INK, fontsize=10)
         ax.set_ylabel("variance (log scale)")
     axes[0, 0].legend(loc="upper right", frameon=False, ncol=3)
-    fig.text(0.01, 0.005, "Shaded: ex-ante high-volatility regime (lagged 22-day variance "
+    fig.text(0.01, 0.005, "Shaded: ex-ante high-volatility regime (22-session RV at the origin "
              "above its 80th training percentile)", color=MUTED, fontsize=8)
     fig.tight_layout(rect=(0, 0.02, 1, 1))
     fig.savefig(path, dpi=150)

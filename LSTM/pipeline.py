@@ -1,19 +1,20 @@
-"""End-to-end LSTM volatility pipeline.
+"""End-to-end LSTM volatility pipeline on the group's Alpaca SPY data.
 
-    python LSTM/pipeline.py --mode quick   # tiny untuned LSTM, 1 seed, static fit
+    python LSTM/pipeline.py --mode quick   # tiny untuned LSTM, 1 seed, static fits
                                            # -> valid forecasts in the contract fast
     python LSTM/pipeline.py --mode full    # tuning on validation, 5 seeds,
-                                           # expanding-window refits, full evaluation
+                                           # expanding-window refits, full evaluation,
+                                           # writes forecasts/{validation,test}/lstm.csv
 
 Steps (see the module of each step):
-  1-2  features.py    targets (log avg GK variance at h = 1, 5, 22) and lagged features
-  3    sequences.py   train-only scaling, sliding windows, chronological split
-  4    har.py         HAR baseline on the same split
+  1-2  features.py    targets (log avg RV over the next 1, 5, 22 sessions) and features
+  3    sequences.py   train-only scaling, sliding windows, matured-label filtering
+  4    har.py         HAR baseline on the same samples
   5    model.py       1-layer LSTM, Adam, MSE, early stopping, seed ensemble
   6    tuning.py      small search, validation set only
-  7    forecast.py    test forecasts (static or expanding window)
-  8    export.py      back to variance, bias correction, contract CSV
-  9    evaluate.py    QLIKE / MSE vs HAR, regimes, seeds, feature importance
+  7    forecast.py    walk-forward forecasts over the validation and test schedules
+  8    export.py      back to variance, bias correction, contract CSVs
+  9    evaluate.py    RMSE / QLIKE vs HAR and persistence, regimes, seeds, importance
 """
 import os
 
@@ -34,86 +35,92 @@ import evaluate
 import export
 import features
 import plots
-from forecast import forecast_test
+from forecast import forecast_phase
 from har import HARModel
 from model import LSTMEnsemble
 from sequences import split_positions
 from tuning import tune
+
+PHASES = ("val", "test")
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--mode", choices=["quick", "full"], default="full")
     p.add_argument("--scheme", choices=["static", "expanding"], default=None,
-                   help="test forecasting scheme (default: static in quick mode, config in full)")
+                   help="walk-forward scheme (default: static in quick mode, config in full)")
     p.add_argument("--no-tune", action="store_true", help="full mode without the search (default params)")
     p.add_argument("--horizons", type=int, nargs="+", default=config.HORIZONS)
+    p.add_argument("--no-submit", action="store_true",
+                   help="full mode: do not write the group files in forecasts/<phase>/")
     return p.parse_args()
 
 
-def val_report(name, y_log, pred_log, s2):
-    rv = np.exp(y_log)
-    f = export.to_variance(pred_log, s2)
-    return {"model": name, "val_MSE_log": float(np.mean((pred_log - y_log) ** 2)),
-            "val_QLIKE": float(evaluate.qlike(rv, f).mean()), "bias_s2": s2}
-
-
-def run_horizon(h, data, feat_cols, splits, params, seeds, scheme, full):
+def run_horizon(h, data, feat_cols, splits, params, seeds, scheme, full, schedules, actuals):
     print(f"\n=== horizon h={h}  params={params}  seeds={seeds}  scheme={scheme}")
     pos = split_positions(data, h, params["window"], splits)
-    y = data[f"target_{h}"].to_numpy()
-    y_val = y[pos["val"]]
-    print(f"  samples: train {len(pos['train'])}, val {len(pos['val'])}, test {len(pos['test'])}")
-
-    # --- Step 4: HAR baseline on the same split ------------------------------
-    har = HARModel(h).fit(data, pos["train"])
-    har_val = har.predict(data, pos["val"])
-    s2_har = export.residual_variance(har_val, y_val)
+    print(f"  initial fit samples: train {len(pos['train'])}, val {len(pos['val'])}")
 
     # --- Step 5: LSTM trained on train, early-stopped on validation ----------
+    # Only used to pick the number of epochs (and for feature importance);
+    # every submitted forecast comes from the walk-forward refits below.
     t0 = time.time()
     ens = LSTMEnsemble(h, feat_cols, params, seeds=seeds).fit(data, pos["train"], pos["val"])
-    lstm_val = ens.predict(data, pos["val"])
-    s2_lstm = export.residual_variance(lstm_val, y_val)
     epochs = int(np.median(ens.best_epochs))
     print(f"  LSTM trained in {time.time() - t0:.0f}s, best epochs {ens.best_epochs}")
-
-    val_rows = [{"horizon": h, **val_report("HAR", y_val, har_val, s2_har)},
-                {"horizon": h, **val_report(config.MODEL_NAME, y_val, lstm_val, s2_lstm)}]
-    for r in val_rows:
-        print(f"  VALIDATION {r['model']:>5}: MSE(log) {r['val_MSE_log']:.4f}  QLIKE {r['val_QLIKE']:.4f}")
-    if val_rows[1]["val_MSE_log"] > 1.05 * val_rows[0]["val_MSE_log"]:
-        print("  !! LSTM is clearly worse than HAR on validation - check features / training.")
-
     importance = evaluate.permutation_importance(ens, data, pos["val"]) if full else None
 
-    # --- Step 7: test forecasts ----------------------------------------------
-    har_test = forecast_test(data, h, params["window"], splits, lambda: HARModel(h), scheme)
-    lstm_test = forecast_test(data, h, params["window"], splits,
-                              lambda: LSTMEnsemble(h, feat_cols, params, seeds=seeds, epochs=epochs),
-                              scheme)
+    # --- Steps 4 + 7: walk-forward forecasts on each phase's schedule ---------
+    log_fc = {}
+    for phase in PHASES:
+        origins = schedules[phase].loc[schedules[phase].horizon == h, "origin_date"]
+        print(f"  {phase}: {len(origins)} scheduled origins")
+        log_fc[phase] = {
+            "HAR": forecast_phase(data, h, params["window"], origins, lambda: HARModel(h), scheme),
+            "LSTM": forecast_phase(data, h, params["window"], origins,
+                                   lambda: LSTMEnsemble(h, feat_cols, params, seeds=seeds, epochs=epochs),
+                                   scheme),
+        }
 
-    # --- Step 8: back to variance with bias correction -----------------------
-    dates = lstm_test.index
-    var_lstm = export.to_variance(lstm_test["log_pred"], s2_lstm)
-    var_har = export.to_variance(har_test.loc[dates, "log_pred"], s2_har)
-    contract = {"lstm": export.contract_frame(dates, h, var_lstm, config.MODEL_NAME),
-                "har": export.contract_frame(dates, h, var_har, "HAR")}
+    # --- Step 8: back to variance; bias term from walk-forward validation ----
+    y = data[f"target_{h}"]
+    s2 = {}
+    for name, fc in log_fc["val"].items():
+        ok = y.loc[fc.index].notna()
+        s2[name] = export.residual_variance(fc.loc[ok, "log_pred"], y.loc[fc.index][ok])
+    variance = {phase: {name: pd.Series(export.to_variance(fc["log_pred"], s2[name]), index=fc.index)
+                        for name, fc in log_fc[phase].items()} for phase in PHASES}
+    contract = {phase: {name: export.contract_frame(v.index, h, v.to_numpy(),
+                                                    config.MODEL_ID if name == "LSTM" else "lstm_har")
+                        for name, v in variance[phase].items()} for phase in PHASES}
 
-    # --- Step 9: evaluation on test dates whose target is observed -----------
-    detail = pd.DataFrame({"horizon": h, "realized": np.exp(data.loc[dates, f"target_{h}"]),
-                           "LSTM": var_lstm, "HAR": var_har}, index=dates)
-    detail["crisis"] = evaluate.crisis_flag(data, dates, splits["train"][1])
-    ok = detail["realized"].notna()
-    d = detail[ok]
-    metrics = evaluate.loss_table(d["realized"], {"HAR": d["HAR"], config.MODEL_NAME: d["LSTM"]},
-                                  h, d["crisis"])
-    seed_cols = [c for c in lstm_test.columns if c.startswith("seed_")]
-    stability = evaluate.seed_stability(d["realized"], lstm_test.loc[ok, seed_cols], s2_lstm, h,
-                                         d["HAR"], d["crisis"])
+    # --- Step 9: scores against actuals.csv on common origins -----------------
+    details, metrics = {}, {}
+    for phase in PHASES:
+        a = actuals[phase].loc[actuals[phase].horizon == h].set_index("origin_date")
+        dates = log_fc[phase]["LSTM"].index
+        detail = pd.DataFrame({"horizon": h, "realized": a["actual"].reindex(dates),
+                               "persistence": a["baseline"].reindex(dates),
+                               "LSTM": variance[phase]["LSTM"], "HAR": variance[phase]["HAR"]},
+                              index=dates)
+        detail["crisis"] = evaluate.crisis_flag(data, dates, splits["train"][1])
+        details[phase] = detail
+        d = detail.dropna(subset=["realized", "persistence", "LSTM", "HAR"])
+        metrics[phase] = evaluate.loss_table(
+            d["realized"], {"persistence": d["persistence"], "HAR": d["HAR"], config.MODEL_NAME: d["LSTM"]},
+            h, d["crisis"]).assign(phase=phase, bias_s2=lambda t: t.model.map(
+                {"HAR": s2["HAR"], config.MODEL_NAME: s2["LSTM"]}))
+        all_rows = metrics[phase][metrics[phase].regime == "all"].set_index("model")
+        print(f"  {phase.upper():>4} RMSE  persistence {all_rows.RMSE['persistence']:.3e}  "
+              f"HAR {all_rows.RMSE['HAR']:.3e}  LSTM {all_rows.RMSE[config.MODEL_NAME]:.3e}  (n={len(d)})")
 
-    return dict(val=val_rows, contract=contract, detail=detail, metrics=metrics,
-                stability=stability, importance=importance, epochs=epochs)
+    d = details["test"].dropna(subset=["realized", "HAR", "LSTM"])
+    seed_cols = [c for c in log_fc["test"]["LSTM"].columns if c.startswith("seed_")]
+    stability = evaluate.seed_stability(d["realized"], log_fc["test"]["LSTM"].loc[d.index, seed_cols],
+                                        s2["LSTM"], h, d["HAR"], d["crisis"])
+
+    return dict(contract=contract, detail=details["test"], val_detail=details["val"],
+                metrics=metrics, stability=stability, importance=importance, epochs=epochs)
 
 
 def main():
@@ -128,6 +135,9 @@ def main():
     # --- Steps 1-2: data, target, features -----------------------------------
     df, splits = data_loader.load_all()
     data, feat_cols = features.build_dataset(df)
+    schedules = {p: data_loader.load_schedule(p) for p in PHASES}
+    schedules = {p: s[s.horizon.isin(args.horizons)].reset_index(drop=True) for p, s in schedules.items()}
+    actuals = {p: data_loader.load_actuals(p) for p in PHASES}
     print("Splits:", {k: f"{a.date()} -> {b.date()}" for k, (a, b) in splits.items()})
     print("Features:", feat_cols)
 
@@ -138,33 +148,47 @@ def main():
         tuning_results.to_csv(out_dir / "tuning_results.csv", index=False)
     else:
         best = {h: dict(config.DEFAULT_PARAMS) for h in args.horizons}
-    (out_dir / "params.json").write_text(json.dumps(
-        {"params": {str(h): p for h, p in best.items()}, "seeds": seeds, "scheme": scheme,
-         "refit_freq": config.REFIT_FREQ if scheme == "expanding" else None,
-         "features": feat_cols, "export_unit": config.EXPORT_UNIT, "annualized": config.ANNUALIZE},
-        indent=2))
 
-    results = {h: run_horizon(h, data, feat_cols, splits, best[h], seeds, scheme, full)
+    results = {h: run_horizon(h, data, feat_cols, splits, best[h], seeds, scheme, full, schedules, actuals)
                for h in args.horizons}
+    (out_dir / "params.json").write_text(json.dumps(
+        {"params": {str(h): p for h, p in best.items()},
+         "refit_epochs": {str(h): r["epochs"] for h, r in results.items()},
+         "seeds": seeds, "scheme": scheme,
+         "refit_freq": config.REFIT_FREQ if scheme == "expanding" else None,
+         "features": feat_cols, "vix_lag": config.VIX_LAG, "bias_correction": config.BIAS_CORRECTION},
+        indent=2))
 
     # --- Outputs ---------------------------------------------------------------
     print("\n=== Outputs")
     cat = lambda key: pd.concat([r[key] for r in results.values()], ignore_index=True)
-    export.write_contract([r["contract"]["lstm"] for r in results.values()], out_dir / "forecasts_lstm.csv")
-    export.write_contract([r["contract"]["har"] for r in results.values()], out_dir / "forecasts_har_baseline.csv")
-    pd.DataFrame([row for r in results.values() for row in r["val"]]).to_csv(out_dir / "validation.csv", index=False)
-    metrics = cat("metrics")
-    metrics.to_csv(out_dir / "test_metrics.csv", index=False)
+    submit = full and not args.no_submit and sorted(args.horizons) == sorted(config.HORIZONS)
+    for phase in PHASES:
+        folder = config.PHASES[phase]
+        lstm = [r["contract"][phase]["LSTM"] for r in results.values()]
+        har = [r["contract"][phase]["HAR"] for r in results.values()]
+        export.write_contract(lstm, out_dir / "forecasts" / folder / f"{config.MODEL_ID}.csv", schedules[phase])
+        export.write_contract(har, out_dir / "forecasts" / folder / "lstm_har.csv", schedules[phase])
+        if submit:
+            export.write_contract(lstm, config.FORECASTS_DIR / folder / f"{config.MODEL_ID}.csv",
+                                  schedules[phase])
+
+    metrics = pd.concat([r["metrics"][p] for r in results.values() for p in PHASES], ignore_index=True)
+    metrics[metrics.phase == "val"].to_csv(out_dir / "validation.csv", index=False)
+    metrics[metrics.phase == "test"].to_csv(out_dir / "test_metrics.csv", index=False)
     cat("stability").to_csv(out_dir / "seed_stability.csv", index=False)
-    pd.concat([r["detail"] for r in results.values()]).rename_axis("date").to_csv(out_dir / "test_detail.csv")
+    pd.concat([r["detail"] for r in results.values()]).rename_axis("origin_date").to_csv(out_dir / "test_detail.csv")
     if full:
         cat("importance").to_csv(out_dir / "feature_importance.csv", index=False)
     plots.make_all(results, out_dir)
 
-    print("\n=== Test metrics (variance scale; ratio < 1 means LSTM beats HAR)")
-    cols = ["horizon", "regime", "model", "n", "QLIKE", "MSE", "QLIKE_vs_HAR", "MSE_vs_HAR", "DM_QLIKE_p"]
-    with pd.option_context("display.width", 160, "display.float_format", "{:.4g}".format):
-        print(metrics[[c for c in cols if c in metrics]].to_string(index=False))
+    cols = ["horizon", "regime", "model", "n", "RMSE", "RMSE_vs_pers", "RMSE_vs_HAR", "QLIKE",
+            "QLIKE_vs_HAR", "DM_SE_pers_p"]
+    for phase in PHASES:
+        print(f"\n=== {phase} metrics (variance scale; ratio < 1 means better than the reference)")
+        m = metrics[(metrics.phase == phase) & (metrics.regime == "all")]
+        with pd.option_context("display.width", 180, "display.float_format", "{:.4g}".format):
+            print(m[[c for c in cols if c in m]].to_string(index=False))
     print(f"\nAll outputs in {out_dir}")
 
 
