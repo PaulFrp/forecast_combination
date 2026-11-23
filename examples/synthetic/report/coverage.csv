@@ -1,0 +1,10 @@
+method,kind,horizon,scheduled,scored,missing_actuals,missing_predictions
+synthetic_a,forecast,1,53,50,2,0
+synthetic_b,forecast,1,53,50,2,0
+Baseline,baseline,1,53,50,2,1
+synthetic_a,forecast,5,53,37,10,1
+synthetic_b,forecast,5,53,37,10,0
+Baseline,baseline,5,53,37,10,5
+synthetic_a,forecast,22,53,8,44,0
+synthetic_b,forecast,22,53,8,44,0
+Baseline,baseline,22,53,8,44,22

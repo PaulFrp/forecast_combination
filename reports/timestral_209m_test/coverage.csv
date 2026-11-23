@@ -1,0 +1,10 @@
+method,kind,horizon,scheduled,scored,missing_actuals,missing_predictions
+timestral_209m_rv_vix,forecast,1,949,949,0,0
+timestral_28m_rv_vix,forecast,1,949,949,0,0
+Baseline,baseline,1,949,949,0,0
+timestral_209m_rv_vix,forecast,5,949,949,0,0
+timestral_28m_rv_vix,forecast,5,949,949,0,0
+Baseline,baseline,5,949,949,0,0
+timestral_209m_rv_vix,forecast,22,949,949,0,0
+timestral_28m_rv_vix,forecast,22,949,949,0,0
+Baseline,baseline,22,949,949,0,0
