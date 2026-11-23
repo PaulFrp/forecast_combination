@@ -109,7 +109,8 @@ def run_horizon(h, data, feat_cols, splits, params, seeds, scheme, full):
     metrics = evaluate.loss_table(d["realized"], {"HAR": d["HAR"], config.MODEL_NAME: d["LSTM"]},
                                   h, d["crisis"])
     seed_cols = [c for c in lstm_test.columns if c.startswith("seed_")]
-    stability = evaluate.seed_stability(d["realized"], lstm_test.loc[ok, seed_cols], s2_lstm, h)
+    stability = evaluate.seed_stability(d["realized"], lstm_test.loc[ok, seed_cols], s2_lstm, h,
+                                         d["HAR"], d["crisis"])
 
     return dict(val=val_rows, contract=contract, detail=detail, metrics=metrics,
                 stability=stability, importance=importance, epochs=epochs)

@@ -57,16 +57,27 @@ def loss_table(rv: pd.Series, forecasts: dict[str, pd.Series], h: int,
     return pd.DataFrame(rows)
 
 
-def seed_stability(rv: pd.Series, per_seed: pd.DataFrame, s2: float, h: int) -> pd.DataFrame:
-    """Test QLIKE of each individual seed vs the seed average."""
+def seed_stability(rv: pd.Series, per_seed: pd.DataFrame, s2: float, h: int,
+                   har: pd.Series, crisis: pd.Series) -> pd.DataFrame:
+    """Test QLIKE of each individual seed vs the seed average, per regime,
+    with the QLIKE ratio to HAR (< 1 means that seed beats HAR)."""
     adj = np.exp(0.5 * s2) if config.BIAS_CORRECTION else 1.0
-    rows = [{"horizon": h, "member": c, "QLIKE": qlike(rv, np.exp(per_seed[c]) * adj).mean()}
-            for c in per_seed.columns]
-    rows.append({"horizon": h, "member": "ensemble",
-                 "QLIKE": qlike(rv, np.exp(per_seed.mean(axis=1)) * adj).mean()})
+    members = {c: np.exp(per_seed[c]) * adj for c in per_seed.columns}
+    members["ensemble"] = np.exp(per_seed.mean(axis=1)) * adj
+    crisis = crisis.to_numpy()
+    rows = []
+    for regime, mask in [("all", np.ones(len(rv), bool)), ("calm", ~crisis), ("crisis", crisis)]:
+        har_q = qlike(rv[mask], har[mask]).mean()
+        for name, fc in members.items():
+            q = qlike(rv[mask], fc[mask]).mean()
+            rows.append({"horizon": h, "regime": regime, "member": name,
+                         "QLIKE": q, "QLIKE_vs_HAR": q / har_q})
     out = pd.DataFrame(rows)
-    singles = out[out.member != "ensemble"].QLIKE
-    out["seed_mean"], out["seed_std"] = singles.mean(), singles.std()
+    singles = out[out.member != "ensemble"].groupby("regime")["QLIKE_vs_HAR"]
+    out["ratio_seed_mean"] = out.regime.map(singles.mean())
+    out["ratio_seed_std"] = out.regime.map(singles.std())
+    out["ratio_seed_min"] = out.regime.map(singles.min())
+    out["ratio_seed_max"] = out.regime.map(singles.max())
     return out
 
 
