@@ -1,20 +1,24 @@
 """Back-transform log forecasts and export them in the group contract (step 8).
 
-Contract: one CSV with columns  date, horizon, forecast, model
-  date     : first day of the forecast window (forecast made at the close of date-1)
-  horizon  : 1, 5 or 22
-  forecast : average daily GK variance over the next `horizon` days
-             (or volatility / annualised, see config.EXPORT_UNIT and ANNUALIZE)
+Contract (root README, step 5): one CSV per phase with columns
+    model_id, origin_date, horizon, prediction
+  origin_date : forecast origin (made at 17:00 New York on that session)
+  horizon     : 1, 5 or 22
+  prediction  : expected average daily realized variance over the next
+                `horizon` sessions, unannualized
+Exactly one row per key of the phase's forecast_schedule.csv; the shared
+validator in pipeline/csv_io.py enforces that.
 """
 import numpy as np
 import pandas as pd
 
 import config
+from data_loader import FORECAST, export
 
 
-def residual_variance(log_pred: np.ndarray, log_true: np.ndarray) -> float:
+def residual_variance(log_pred, log_true) -> float:
     """s^2 of log forecast errors, used for the lognormal bias correction."""
-    return float(np.var(log_true - log_pred))
+    return float(np.var(np.asarray(log_true) - np.asarray(log_pred)))
 
 
 def to_variance(log_pred, s2: float = 0.0) -> np.ndarray:
@@ -24,23 +28,20 @@ def to_variance(log_pred, s2: float = 0.0) -> np.ndarray:
     return np.exp(np.asarray(log_pred) + adj)
 
 
-def to_export_units(variance) -> np.ndarray:
-    v = np.asarray(variance) * (config.TRADING_DAYS if config.ANNUALIZE else 1)
-    return np.sqrt(v) if config.EXPORT_UNIT == "volatility" else v
-
-
-def contract_frame(dates, horizon: int, variance, model: str) -> pd.DataFrame:
+def contract_frame(dates, horizon: int, variance, model_id: str) -> pd.DataFrame:
+    v = np.asarray(variance, dtype=float)
     return pd.DataFrame({
-        "date": pd.DatetimeIndex(dates).strftime("%Y-%m-%d"),
+        "model_id": model_id,
+        "origin_date": pd.DatetimeIndex(dates).strftime("%Y-%m-%d"),
         "horizon": horizon,
-        "forecast": to_export_units(variance),
-        "model": model,
+        # a failed forecast stays as a blank row, as the contract asks
+        "prediction": np.where(np.isfinite(v) & (v > 0), v, np.nan),
     })
 
 
-def write_contract(frames: list[pd.DataFrame], path) -> pd.DataFrame:
-    out = pd.concat(frames, ignore_index=True).sort_values(["horizon", "date"])
-    path.parent.mkdir(parents=True, exist_ok=True)
-    out.to_csv(path, index=False, float_format="%.10g")
-    print(f"  wrote {len(out)} rows -> {path}")
+def write_contract(frames: list[pd.DataFrame], path, schedule: pd.DataFrame) -> pd.DataFrame:
+    out = pd.concat(frames, ignore_index=True)
+    sched = schedule.assign(origin_date=schedule["origin_date"].dt.strftime("%Y-%m-%d"))
+    export(out[list(FORECAST)], path, FORECAST, schedule=sched)
+    print(f"  wrote {len(out)} rows ({int(out['prediction'].isna().sum())} blank) -> {path}")
     return out

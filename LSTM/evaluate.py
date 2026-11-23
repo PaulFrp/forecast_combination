@@ -1,9 +1,11 @@
 """Evaluation and material for the slides (step 9).
 
-All losses are computed on the *variance* scale (average daily GK variance over
-the horizon), i.e. on the realised target exp(target_h).
-  QLIKE = mean( rv/f - log(rv/f) - 1 )      (robust to noise in the proxy)
-  MSE   = mean( (rv - f)^2 )
+All losses are computed on the *variance* scale, against `actual` from the
+phase's actuals.csv (average daily realized variance over the next h sessions).
+  RMSE  = sqrt(mean( (rv - f)^2 ))          (the group's primary metric)
+  QLIKE = mean( rv/f - log(rv/f) - 1 )      (secondary, robust to proxy noise)
+Every model is scored on the same origins, together with the persistence
+`baseline` of actuals.csv.
 """
 from math import erf, sqrt
 
@@ -38,7 +40,8 @@ def diebold_mariano(loss_a, loss_b, h: int) -> tuple[float, float]:
 
 def loss_table(rv: pd.Series, forecasts: dict[str, pd.Series], h: int,
                crisis: pd.Series) -> pd.DataFrame:
-    """QLIKE / MSE per model, overall and by regime, plus DM vs HAR."""
+    """RMSE / QLIKE per model, overall and by regime, with ratios and
+    Diebold-Mariano tests against HAR and against the persistence baseline."""
     rows = []
     for regime, mask in [("all", np.ones(len(rv), bool)), ("calm", ~crisis.to_numpy()),
                          ("crisis", crisis.to_numpy())]:
@@ -47,12 +50,15 @@ def loss_table(rv: pd.Series, forecasts: dict[str, pd.Series], h: int,
         for name, f in forecasts.items():
             q, m = qlike(rv[mask], f[mask]), sq_err(rv[mask], f[mask])
             row = {"horizon": h, "regime": regime, "model": name, "n": int(mask.sum()),
-                   "QLIKE": q.mean(), "MSE": m.mean()}
-            if name != "HAR" and "HAR" in forecasts:
-                hq, hm = qlike(rv[mask], forecasts["HAR"][mask]), sq_err(rv[mask], forecasts["HAR"][mask])
-                row["QLIKE_vs_HAR"] = q.mean() / hq.mean()
-                row["MSE_vs_HAR"] = m.mean() / hm.mean()
-                row["DM_QLIKE_stat"], row["DM_QLIKE_p"] = diebold_mariano(q, hq, h)
+                   "RMSE": np.sqrt(m.mean()), "QLIKE": q.mean(), "MSE": m.mean()}
+            for ref, tag in [("HAR", "HAR"), ("persistence", "pers")]:
+                if name == ref or ref not in forecasts:
+                    continue
+                rq, rm = qlike(rv[mask], forecasts[ref][mask]), sq_err(rv[mask], forecasts[ref][mask])
+                row[f"RMSE_vs_{tag}"] = np.sqrt(m.mean() / rm.mean())
+                row[f"QLIKE_vs_{tag}"] = q.mean() / rq.mean()
+                row[f"DM_SE_{tag}_p"] = diebold_mariano(m, rm, h)[1]
+                row[f"DM_QLIKE_{tag}_p"] = diebold_mariano(q, rq, h)[1]
             rows.append(row)
     return pd.DataFrame(rows)
 
