@@ -41,7 +41,8 @@ def diebold_mariano(loss_a, loss_b, h: int) -> tuple[float, float]:
 def loss_table(rv: pd.Series, forecasts: dict[str, pd.Series], h: int,
                crisis: pd.Series) -> pd.DataFrame:
     """RMSE / QLIKE per model, overall and by regime, with ratios and
-    Diebold-Mariano tests against HAR and against the persistence baseline."""
+    Diebold-Mariano tests against the HAR benchmark (model_3's har_rv) and
+    against the persistence baseline."""
     rows = []
     for regime, mask in [("all", np.ones(len(rv), bool)), ("calm", ~crisis.to_numpy()),
                          ("crisis", crisis.to_numpy())]:
@@ -51,7 +52,7 @@ def loss_table(rv: pd.Series, forecasts: dict[str, pd.Series], h: int,
             q, m = qlike(rv[mask], f[mask]), sq_err(rv[mask], f[mask])
             row = {"horizon": h, "regime": regime, "model": name, "n": int(mask.sum()),
                    "RMSE": np.sqrt(m.mean()), "QLIKE": q.mean(), "MSE": m.mean()}
-            for ref, tag in [("HAR", "HAR"), ("persistence", "pers")]:
+            for ref, tag in [(config.BENCHMARK_NAME, "HAR"), ("persistence", "pers")]:
                 if name == ref or ref not in forecasts:
                     continue
                 rq, rm = qlike(rv[mask], forecasts[ref][mask]), sq_err(rv[mask], forecasts[ref][mask])
@@ -65,8 +66,8 @@ def loss_table(rv: pd.Series, forecasts: dict[str, pd.Series], h: int,
 
 def seed_stability(rv: pd.Series, per_seed: pd.DataFrame, s2: float, h: int,
                    har: pd.Series, crisis: pd.Series) -> pd.DataFrame:
-    """Test QLIKE of each individual seed vs the seed average, per regime,
-    with the QLIKE ratio to HAR (< 1 means that seed beats HAR)."""
+    """Test RMSE and QLIKE of each individual seed vs the seed average, per
+    regime, with ratios to the HAR benchmark (< 1 means that seed beats it)."""
     adj = np.exp(0.5 * s2) if config.BIAS_CORRECTION else 1.0
     members = {c: np.exp(per_seed[c]) * adj for c in per_seed.columns}
     members["ensemble"] = np.exp(per_seed.mean(axis=1)) * adj
@@ -74,10 +75,12 @@ def seed_stability(rv: pd.Series, per_seed: pd.DataFrame, s2: float, h: int,
     rows = []
     for regime, mask in [("all", np.ones(len(rv), bool)), ("calm", ~crisis), ("crisis", crisis)]:
         har_q = qlike(rv[mask], har[mask]).mean()
+        har_r = np.sqrt(sq_err(rv[mask], har[mask]).mean())
         for name, fc in members.items():
             q = qlike(rv[mask], fc[mask]).mean()
-            rows.append({"horizon": h, "regime": regime, "member": name,
-                         "QLIKE": q, "QLIKE_vs_HAR": q / har_q})
+            r = np.sqrt(sq_err(rv[mask], fc[mask]).mean())
+            rows.append({"horizon": h, "regime": regime, "member": name, "RMSE": r,
+                         "RMSE_vs_HAR": r / har_r, "QLIKE": q, "QLIKE_vs_HAR": q / har_q})
     out = pd.DataFrame(rows)
     singles = out[out.member != "ensemble"].groupby("regime")["QLIKE_vs_HAR"]
     out["ratio_seed_mean"] = out.regime.map(singles.mean())

@@ -2,7 +2,7 @@
 
 Used for both the validation schedule (the forecasts the combination step learns
 weights from) and the test schedule. Two schemes, for any model with
-fit / predict (HARModel or LSTMEnsemble):
+fit / predict (e.g. LSTMEnsemble):
   * static    : fit once at the first origin of the phase, on every label
                 matured by then, and predict the whole phase;
   * expanding : at each refit date T (every month / quarter) fit on every label

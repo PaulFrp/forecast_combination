@@ -1,7 +1,6 @@
 """Small LSTM, its training loop, and a multi-seed ensemble (step 5).
 
-LSTMEnsemble exposes the same fit / predict interface as har.HARModel, so the
-forecasting and evaluation code treats both models identically.
+LSTMEnsemble exposes a generic fit / predict interface used by forecast.py.
 """
 import copy
 import random
@@ -88,7 +87,7 @@ def train_one(x_tr, y_tr, params: dict, seed: int, x_val=None, y_val=None,
 
 
 class LSTMEnsemble:
-    """Average of several seeds. Works on log average variance, like HARModel."""
+    """Average of several seeds. Works on log average variance."""
     name = config.MODEL_NAME
 
     def __init__(self, h: int, feature_cols: list[str], params: dict | None = None,

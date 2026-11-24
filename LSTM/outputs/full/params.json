@@ -2,7 +2,7 @@
   "params": {
     "1": {
       "window": 66,
-      "units": 16,
+      "units": 32,
       "dropout": 0.1,
       "lr": 0.003
     },
@@ -13,11 +13,16 @@
       "lr": 0.001
     },
     "22": {
-      "window": 44,
-      "units": 16,
+      "window": 22,
+      "units": 32,
       "dropout": 0.3,
       "lr": 0.003
     }
+  },
+  "refit_epochs": {
+    "1": 25,
+    "5": 25,
+    "22": 1
   },
   "seeds": [
     0,
@@ -38,6 +43,6 @@
     "log_volume",
     "log_vix"
   ],
-  "export_unit": "variance",
-  "annualized": false
+  "vix_lag": 1,
+  "bias_correction": true
 }

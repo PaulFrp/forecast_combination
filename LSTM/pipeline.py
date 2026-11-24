@@ -9,12 +9,12 @@
 Steps (see the module of each step):
   1-2  features.py    targets (log avg RV over the next 1, 5, 22 sessions) and features
   3    sequences.py   train-only scaling, sliding windows, matured-label filtering
-  4    har.py         HAR baseline on the same samples
   5    model.py       1-layer LSTM, Adam, MSE, early stopping, seed ensemble
   6    tuning.py      small search, validation set only
   7    forecast.py    walk-forward forecasts over the validation and test schedules
   8    export.py      back to variance, bias correction, contract CSVs
-  9    evaluate.py    RMSE / QLIKE vs HAR and persistence, regimes, seeds, importance
+  9    evaluate.py    RMSE / QLIKE vs model_3 HAR-RV (forecasts/<phase>/har_rv.csv)
+                      and persistence, regimes, seeds, importance
 """
 import os
 
@@ -36,7 +36,6 @@ import export
 import features
 import plots
 from forecast import forecast_phase
-from har import HARModel
 from model import LSTMEnsemble
 from sequences import split_positions
 from tuning import tune
@@ -56,7 +55,7 @@ def parse_args():
     return p.parse_args()
 
 
-def run_horizon(h, data, feat_cols, splits, params, seeds, scheme, full, schedules, actuals):
+def run_horizon(h, data, feat_cols, splits, params, seeds, scheme, full, schedules, actuals, benchmarks):
     print(f"\n=== horizon h={h}  params={params}  seeds={seeds}  scheme={scheme}")
     pos = split_positions(data, h, params["window"], splits)
     print(f"  initial fit samples: train {len(pos['train'])}, val {len(pos['val'])}")
@@ -70,54 +69,52 @@ def run_horizon(h, data, feat_cols, splits, params, seeds, scheme, full, schedul
     print(f"  LSTM trained in {time.time() - t0:.0f}s, best epochs {ens.best_epochs}")
     importance = evaluate.permutation_importance(ens, data, pos["val"]) if full else None
 
-    # --- Steps 4 + 7: walk-forward forecasts on each phase's schedule ---------
+    # --- Step 7: walk-forward LSTM forecasts on each phase's schedule ---------
     log_fc = {}
     for phase in PHASES:
         origins = schedules[phase].loc[schedules[phase].horizon == h, "origin_date"]
         print(f"  {phase}: {len(origins)} scheduled origins")
-        log_fc[phase] = {
-            "HAR": forecast_phase(data, h, params["window"], origins, lambda: HARModel(h), scheme),
-            "LSTM": forecast_phase(data, h, params["window"], origins,
-                                   lambda: LSTMEnsemble(h, feat_cols, params, seeds=seeds, epochs=epochs),
-                                   scheme),
-        }
+        log_fc[phase] = forecast_phase(data, h, params["window"], origins,
+                                       lambda: LSTMEnsemble(h, feat_cols, params, seeds=seeds, epochs=epochs),
+                                       scheme)
 
     # --- Step 8: back to variance; bias term from walk-forward validation ----
     y = data[f"target_{h}"]
-    s2 = {}
-    for name, fc in log_fc["val"].items():
-        ok = y.loc[fc.index].notna()
-        s2[name] = export.residual_variance(fc.loc[ok, "log_pred"], y.loc[fc.index][ok])
-    variance = {phase: {name: pd.Series(export.to_variance(fc["log_pred"], s2[name]), index=fc.index)
-                        for name, fc in log_fc[phase].items()} for phase in PHASES}
-    contract = {phase: {name: export.contract_frame(v.index, h, v.to_numpy(),
-                                                    config.MODEL_ID if name == "LSTM" else "lstm_har")
-                        for name, v in variance[phase].items()} for phase in PHASES}
+    fc = log_fc["val"]
+    ok = y.loc[fc.index].notna()
+    s2 = export.residual_variance(fc.loc[ok, "log_pred"], y.loc[fc.index][ok])
+    variance = {phase: pd.Series(export.to_variance(log_fc[phase]["log_pred"], s2), index=log_fc[phase].index)
+                for phase in PHASES}
+    contract = {phase: export.contract_frame(v.index, h, v.to_numpy(), config.MODEL_ID)
+                for phase, v in variance.items()}
 
-    # --- Step 9: scores against actuals.csv on common origins -----------------
+    # --- Step 9: scores against actuals.csv, vs model_3 HAR-RV and persistence,
+    #             on the origins where all of them are present ------------------
+    bench = config.BENCHMARK_NAME
     details, metrics = {}, {}
     for phase in PHASES:
         a = actuals[phase].loc[actuals[phase].horizon == h].set_index("origin_date")
-        dates = log_fc[phase]["LSTM"].index
+        b = benchmarks[phase].loc[benchmarks[phase].horizon == h].set_index("origin_date")["prediction"]
+        dates = log_fc[phase].index
         detail = pd.DataFrame({"horizon": h, "realized": a["actual"].reindex(dates),
                                "persistence": a["baseline"].reindex(dates),
-                               "LSTM": variance[phase]["LSTM"], "HAR": variance[phase]["HAR"]},
+                               "LSTM": variance[phase], bench: b.reindex(dates)},
                               index=dates)
         detail["crisis"] = evaluate.crisis_flag(data, dates, splits["train"][1])
         details[phase] = detail
-        d = detail.dropna(subset=["realized", "persistence", "LSTM", "HAR"])
+        d = detail.dropna(subset=["realized", "persistence", "LSTM", bench])
         metrics[phase] = evaluate.loss_table(
-            d["realized"], {"persistence": d["persistence"], "HAR": d["HAR"], config.MODEL_NAME: d["LSTM"]},
-            h, d["crisis"]).assign(phase=phase, bias_s2=lambda t: t.model.map(
-                {"HAR": s2["HAR"], config.MODEL_NAME: s2["LSTM"]}))
+            d["realized"], {"persistence": d["persistence"], bench: d[bench], config.MODEL_NAME: d["LSTM"]},
+            h, d["crisis"]).assign(phase=phase,
+                                  bias_s2=lambda t: t.model.map({config.MODEL_NAME: s2}))
         all_rows = metrics[phase][metrics[phase].regime == "all"].set_index("model")
         print(f"  {phase.upper():>4} RMSE  persistence {all_rows.RMSE['persistence']:.3e}  "
-              f"HAR {all_rows.RMSE['HAR']:.3e}  LSTM {all_rows.RMSE[config.MODEL_NAME]:.3e}  (n={len(d)})")
+              f"{bench} {all_rows.RMSE[bench]:.3e}  LSTM {all_rows.RMSE[config.MODEL_NAME]:.3e}  (n={len(d)})")
 
-    d = details["test"].dropna(subset=["realized", "HAR", "LSTM"])
-    seed_cols = [c for c in log_fc["test"]["LSTM"].columns if c.startswith("seed_")]
-    stability = evaluate.seed_stability(d["realized"], log_fc["test"]["LSTM"].loc[d.index, seed_cols],
-                                        s2["LSTM"], h, d["HAR"], d["crisis"])
+    d = details["test"].dropna(subset=["realized", bench, "LSTM"])
+    seed_cols = [c for c in log_fc["test"].columns if c.startswith("seed_")]
+    stability = evaluate.seed_stability(d["realized"], log_fc["test"].loc[d.index, seed_cols],
+                                        s2, h, d[bench], d["crisis"])
 
     return dict(contract=contract, detail=details["test"], val_detail=details["val"],
                 metrics=metrics, stability=stability, importance=importance, epochs=epochs)
@@ -138,6 +135,7 @@ def main():
     schedules = {p: data_loader.load_schedule(p) for p in PHASES}
     schedules = {p: s[s.horizon.isin(args.horizons)].reset_index(drop=True) for p, s in schedules.items()}
     actuals = {p: data_loader.load_actuals(p) for p in PHASES}
+    benchmarks = {p: data_loader.load_benchmark(p, schedules[p]) for p in PHASES}
     print("Splits:", {k: f"{a.date()} -> {b.date()}" for k, (a, b) in splits.items()})
     print("Features:", feat_cols)
 
@@ -149,7 +147,8 @@ def main():
     else:
         best = {h: dict(config.DEFAULT_PARAMS) for h in args.horizons}
 
-    results = {h: run_horizon(h, data, feat_cols, splits, best[h], seeds, scheme, full, schedules, actuals)
+    results = {h: run_horizon(h, data, feat_cols, splits, best[h], seeds, scheme, full, schedules, actuals,
+                          benchmarks)
                for h in args.horizons}
     (out_dir / "params.json").write_text(json.dumps(
         {"params": {str(h): p for h, p in best.items()},
@@ -165,10 +164,8 @@ def main():
     submit = full and not args.no_submit and sorted(args.horizons) == sorted(config.HORIZONS)
     for phase in PHASES:
         folder = config.PHASES[phase]
-        lstm = [r["contract"][phase]["LSTM"] for r in results.values()]
-        har = [r["contract"][phase]["HAR"] for r in results.values()]
+        lstm = [r["contract"][phase] for r in results.values()]
         export.write_contract(lstm, out_dir / "forecasts" / folder / f"{config.MODEL_ID}.csv", schedules[phase])
-        export.write_contract(har, out_dir / "forecasts" / folder / "lstm_har.csv", schedules[phase])
         if submit:
             export.write_contract(lstm, config.FORECASTS_DIR / folder / f"{config.MODEL_ID}.csv",
                                   schedules[phase])

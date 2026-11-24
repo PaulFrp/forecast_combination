@@ -35,7 +35,7 @@ def forecasts_figure(results, path):
         d = results[h]["detail"]
         _shade(ax, d["crisis"])
         ax.plot(d.index, d["realized"], color=COLORS["realized"], lw=0.8, label="Realised RV")
-        ax.plot(d.index, d["HAR"], color=COLORS["HAR"], lw=1.5, label="HAR")
+        ax.plot(d.index, d["HAR"], color=COLORS["HAR"], lw=1.5, label="HAR-RV (model_3)")
         ax.plot(d.index, d["LSTM"], color=COLORS["LSTM"], lw=1.5, label="LSTM")
         ax.set_yscale("log")
         ax.set_title(f"h = {h} day{'s' if h > 1 else ''}: average daily realized variance, test origins",

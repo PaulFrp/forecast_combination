@@ -1,0 +1,162 @@
+Splits: {'train': '2016-01-04 -> 2020-12-31', 'val': '2021-01-04 -> 2022-12-30', 'test': '2023-01-03 -> 2026-11-13'}
+Features: ['har_d', 'har_w', 'har_m', 'ret_1', 'neg_ret_1', 'ret_5', 'log_volume', 'log_vix']
+
+=== Tuning on validation set
+  h= 1 [ 1/10] {'window': 22, 'units': 16, 'dropout': 0.2, 'lr': 0.001} -> val MSE(log) 0.3815
+  h= 1 [ 2/10] {'window': 44, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3774
+  h= 1 [ 3/10] {'window': 22, 'units': 16, 'dropout': 0.1, 'lr': 0.001} -> val MSE(log) 0.3789
+  h= 1 [ 4/10] {'window': 66, 'units': 16, 'dropout': 0.1, 'lr': 0.003} -> val MSE(log) 0.3835
+  h= 1 [ 5/10] {'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.003} -> val MSE(log) 0.3754
+  h= 1 [ 6/10] {'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3778
+  h= 1 [ 7/10] {'window': 44, 'units': 16, 'dropout': 0.3, 'lr': 0.003} -> val MSE(log) 0.3812
+  h= 1 [ 8/10] {'window': 66, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3796
+  h= 1 [ 9/10] {'window': 66, 'units': 32, 'dropout': 0.1, 'lr': 0.003} -> val MSE(log) 0.3753
+  h= 1 [10/10] {'window': 44, 'units': 16, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3858
+  h= 5 [ 1/10] {'window': 22, 'units': 16, 'dropout': 0.2, 'lr': 0.001} -> val MSE(log) 0.3229
+  h= 5 [ 2/10] {'window': 44, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3263
+  h= 5 [ 3/10] {'window': 22, 'units': 16, 'dropout': 0.1, 'lr': 0.001} -> val MSE(log) 0.3221
+  h= 5 [ 4/10] {'window': 66, 'units': 16, 'dropout': 0.1, 'lr': 0.003} -> val MSE(log) 0.3255
+  h= 5 [ 5/10] {'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.003} -> val MSE(log) 0.3280
+  h= 5 [ 6/10] {'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3219
+  h= 5 [ 7/10] {'window': 44, 'units': 16, 'dropout': 0.3, 'lr': 0.003} -> val MSE(log) 0.3277
+  h= 5 [ 8/10] {'window': 66, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3297
+  h= 5 [ 9/10] {'window': 66, 'units': 32, 'dropout': 0.1, 'lr': 0.003} -> val MSE(log) 0.3356
+  h= 5 [10/10] {'window': 44, 'units': 16, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3265
+  h=22 [ 1/10] {'window': 22, 'units': 16, 'dropout': 0.2, 'lr': 0.001} -> val MSE(log) 0.3293
+  h=22 [ 2/10] {'window': 44, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3366
+  h=22 [ 3/10] {'window': 22, 'units': 16, 'dropout': 0.1, 'lr': 0.001} -> val MSE(log) 0.3282
+  h=22 [ 4/10] {'window': 66, 'units': 16, 'dropout': 0.1, 'lr': 0.003} -> val MSE(log) 0.3350
+  h=22 [ 5/10] {'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.003} -> val MSE(log) 0.3159
+  h=22 [ 6/10] {'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3331
+  h=22 [ 7/10] {'window': 44, 'units': 16, 'dropout': 0.3, 'lr': 0.003} -> val MSE(log) 0.3327
+  h=22 [ 8/10] {'window': 66, 'units': 32, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3445
+  h=22 [ 9/10] {'window': 66, 'units': 32, 'dropout': 0.1, 'lr': 0.003} -> val MSE(log) 0.3306
+  h=22 [10/10] {'window': 44, 'units': 16, 'dropout': 0.3, 'lr': 0.001} -> val MSE(log) 0.3313
+
+=== horizon h=1  params={'window': 66, 'units': 32, 'dropout': 0.1, 'lr': 0.003}  seeds=[0, 1, 2, 3, 4]  scheme=expanding
+  initial fit samples: train 1128, val 502
+  LSTM trained in 95s, best epochs [21, 35, 25, 22, 25]
+  val: 481 scheduled origins
+    LSTM h= 1 refit  1/8 @ 2021-01-04 (1129 train samples, 61 forecasts)
+    LSTM h= 1 refit  2/8 @ 2021-04-01 (1190 train samples, 63 forecasts)
+    LSTM h= 1 refit  3/8 @ 2021-07-01 (1253 train samples, 64 forecasts)
+    LSTM h= 1 refit  4/8 @ 2021-10-01 (1317 train samples, 64 forecasts)
+    LSTM h= 1 refit  5/8 @ 2022-01-03 (1381 train samples, 62 forecasts)
+    LSTM h= 1 refit  6/8 @ 2022-04-01 (1443 train samples, 62 forecasts)
+    LSTM h= 1 refit  7/8 @ 2022-07-01 (1505 train samples, 64 forecasts)
+    LSTM h= 1 refit  8/8 @ 2022-10-03 (1569 train samples, 41 forecasts)
+  test: 949 scheduled origins
+    LSTM h= 1 refit  1/16 @ 2023-01-03 (1632 train samples, 62 forecasts)
+    LSTM h= 1 refit  2/16 @ 2023-04-03 (1694 train samples, 62 forecasts)
+    LSTM h= 1 refit  3/16 @ 2023-07-03 (1756 train samples, 63 forecasts)
+    LSTM h= 1 refit  4/16 @ 2023-10-02 (1819 train samples, 63 forecasts)
+    LSTM h= 1 refit  5/16 @ 2024-01-02 (1882 train samples, 61 forecasts)
+    LSTM h= 1 refit  6/16 @ 2024-04-01 (1943 train samples, 63 forecasts)
+    LSTM h= 1 refit  7/16 @ 2024-07-01 (2006 train samples, 64 forecasts)
+    LSTM h= 1 refit  8/16 @ 2024-10-01 (2070 train samples, 64 forecasts)
+    LSTM h= 1 refit  9/16 @ 2025-01-02 (2134 train samples, 60 forecasts)
+    LSTM h= 1 refit 10/16 @ 2025-04-01 (2194 train samples, 62 forecasts)
+    LSTM h= 1 refit 11/16 @ 2025-07-01 (2256 train samples, 64 forecasts)
+    LSTM h= 1 refit 12/16 @ 2025-10-01 (2320 train samples, 64 forecasts)
+    LSTM h= 1 refit 13/16 @ 2026-01-02 (2384 train samples, 61 forecasts)
+    LSTM h= 1 refit 14/16 @ 2026-04-01 (2445 train samples, 62 forecasts)
+    LSTM h= 1 refit 15/16 @ 2026-07-01 (2507 train samples, 64 forecasts)
+    LSTM h= 1 refit 16/16 @ 2026-10-01 (2571 train samples, 10 forecasts)
+   VAL RMSE  persistence 8.309e-05  HAR 7.297e-05  LSTM 6.714e-05  (n=481)
+  TEST RMSE  persistence 1.675e-04  HAR 1.503e-04  LSTM 1.181e-04  (n=949)
+
+=== horizon h=5  params={'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.001}  seeds=[0, 1, 2, 3, 4]  scheme=expanding
+  initial fit samples: train 1168, val 498
+  LSTM trained in 16s, best epochs [14, 33, 26, 22, 25]
+  val: 481 scheduled origins
+    LSTM h= 5 refit  1/8 @ 2021-01-04 (1169 train samples, 61 forecasts)
+    LSTM h= 5 refit  2/8 @ 2021-04-01 (1230 train samples, 63 forecasts)
+    LSTM h= 5 refit  3/8 @ 2021-07-01 (1293 train samples, 64 forecasts)
+    LSTM h= 5 refit  4/8 @ 2021-10-01 (1357 train samples, 64 forecasts)
+    LSTM h= 5 refit  5/8 @ 2022-01-03 (1421 train samples, 62 forecasts)
+    LSTM h= 5 refit  6/8 @ 2022-04-01 (1483 train samples, 62 forecasts)
+    LSTM h= 5 refit  7/8 @ 2022-07-01 (1545 train samples, 64 forecasts)
+    LSTM h= 5 refit  8/8 @ 2022-10-03 (1609 train samples, 41 forecasts)
+  test: 949 scheduled origins
+    LSTM h= 5 refit  1/16 @ 2023-01-03 (1672 train samples, 62 forecasts)
+    LSTM h= 5 refit  2/16 @ 2023-04-03 (1734 train samples, 62 forecasts)
+    LSTM h= 5 refit  3/16 @ 2023-07-03 (1796 train samples, 63 forecasts)
+    LSTM h= 5 refit  4/16 @ 2023-10-02 (1859 train samples, 63 forecasts)
+    LSTM h= 5 refit  5/16 @ 2024-01-02 (1922 train samples, 61 forecasts)
+    LSTM h= 5 refit  6/16 @ 2024-04-01 (1983 train samples, 63 forecasts)
+    LSTM h= 5 refit  7/16 @ 2024-07-01 (2046 train samples, 64 forecasts)
+    LSTM h= 5 refit  8/16 @ 2024-10-01 (2110 train samples, 64 forecasts)
+    LSTM h= 5 refit  9/16 @ 2025-01-02 (2174 train samples, 60 forecasts)
+    LSTM h= 5 refit 10/16 @ 2025-04-01 (2234 train samples, 62 forecasts)
+    LSTM h= 5 refit 11/16 @ 2025-07-01 (2296 train samples, 64 forecasts)
+    LSTM h= 5 refit 12/16 @ 2025-10-01 (2360 train samples, 64 forecasts)
+    LSTM h= 5 refit 13/16 @ 2026-01-02 (2424 train samples, 61 forecasts)
+    LSTM h= 5 refit 14/16 @ 2026-04-01 (2485 train samples, 62 forecasts)
+    LSTM h= 5 refit 15/16 @ 2026-07-01 (2547 train samples, 64 forecasts)
+    LSTM h= 5 refit 16/16 @ 2026-10-01 (2611 train samples, 10 forecasts)
+   VAL RMSE  persistence 6.590e-05  HAR 6.061e-05  LSTM 5.400e-05  (n=481)
+  TEST RMSE  persistence 1.384e-04  HAR 1.219e-04  LSTM 9.598e-05  (n=949)
+
+=== horizon h=22  params={'window': 22, 'units': 32, 'dropout': 0.3, 'lr': 0.003}  seeds=[0, 1, 2, 3, 4]  scheme=expanding
+  initial fit samples: train 1151, val 481
+  LSTM trained in 7s, best epochs [5, 1, 3, 1, 1]
+  val: 481 scheduled origins
+    LSTM h=22 refit  1/8 @ 2021-01-04 (1152 train samples, 61 forecasts)
+    LSTM h=22 refit  2/8 @ 2021-04-01 (1213 train samples, 63 forecasts)
+    LSTM h=22 refit  3/8 @ 2021-07-01 (1276 train samples, 64 forecasts)
+    LSTM h=22 refit  4/8 @ 2021-10-01 (1340 train samples, 64 forecasts)
+    LSTM h=22 refit  5/8 @ 2022-01-03 (1404 train samples, 62 forecasts)
+    LSTM h=22 refit  6/8 @ 2022-04-01 (1466 train samples, 62 forecasts)
+    LSTM h=22 refit  7/8 @ 2022-07-01 (1528 train samples, 64 forecasts)
+    LSTM h=22 refit  8/8 @ 2022-10-03 (1592 train samples, 41 forecasts)
+  test: 949 scheduled origins
+    LSTM h=22 refit  1/16 @ 2023-01-03 (1655 train samples, 62 forecasts)
+    LSTM h=22 refit  2/16 @ 2023-04-03 (1717 train samples, 62 forecasts)
+    LSTM h=22 refit  3/16 @ 2023-07-03 (1779 train samples, 63 forecasts)
+    LSTM h=22 refit  4/16 @ 2023-10-02 (1842 train samples, 63 forecasts)
+    LSTM h=22 refit  5/16 @ 2024-01-02 (1905 train samples, 61 forecasts)
+    LSTM h=22 refit  6/16 @ 2024-04-01 (1966 train samples, 63 forecasts)
+    LSTM h=22 refit  7/16 @ 2024-07-01 (2029 train samples, 64 forecasts)
+    LSTM h=22 refit  8/16 @ 2024-10-01 (2093 train samples, 64 forecasts)
+    LSTM h=22 refit  9/16 @ 2025-01-02 (2157 train samples, 60 forecasts)
+    LSTM h=22 refit 10/16 @ 2025-04-01 (2217 train samples, 62 forecasts)
+    LSTM h=22 refit 11/16 @ 2025-07-01 (2279 train samples, 64 forecasts)
+    LSTM h=22 refit 12/16 @ 2025-10-01 (2343 train samples, 64 forecasts)
+    LSTM h=22 refit 13/16 @ 2026-01-02 (2407 train samples, 61 forecasts)
+    LSTM h=22 refit 14/16 @ 2026-04-01 (2468 train samples, 62 forecasts)
+    LSTM h=22 refit 15/16 @ 2026-07-01 (2530 train samples, 64 forecasts)
+    LSTM h=22 refit 16/16 @ 2026-10-01 (2594 train samples, 10 forecasts)
+   VAL RMSE  persistence 5.614e-05  HAR 5.372e-05  LSTM 4.715e-05  (n=481)
+  TEST RMSE  persistence 8.806e-05  HAR 8.228e-05  LSTM 6.369e-05  (n=949)
+
+=== Outputs
+  wrote 1443 rows (0 blank) -> C:\Users\paulf\Desktop\programming\CentraleSupelec\forecast_combination\LSTM\outputs\full\forecasts\validation\lstm.csv
+  wrote 1443 rows (0 blank) -> C:\Users\paulf\Desktop\programming\CentraleSupelec\forecast_combination\forecasts\validation\lstm.csv
+  wrote 2847 rows (0 blank) -> C:\Users\paulf\Desktop\programming\CentraleSupelec\forecast_combination\LSTM\outputs\full\forecasts\test\lstm.csv
+  wrote 2847 rows (0 blank) -> C:\Users\paulf\Desktop\programming\CentraleSupelec\forecast_combination\forecasts\test\lstm.csv
+
+=== val metrics (variance scale; ratio < 1 means better than the reference)
+ horizon regime       model   n      RMSE  RMSE_vs_pers  RMSE_vs_HAR  QLIKE  QLIKE_vs_HAR  DM_SE_pers_p
+       1    all persistence 481 8.309e-05           NaN        1.139 0.3005         1.282           NaN
+       1    all         HAR 481 7.297e-05        0.8782          NaN 0.2344           NaN       0.01314
+       1    all        LSTM 481 6.714e-05         0.808       0.9201 0.1918        0.8183      0.002508
+       5    all persistence 481  6.59e-05           NaN        1.087 0.2634         1.378           NaN
+       5    all         HAR 481 6.061e-05        0.9197          NaN 0.1911           NaN        0.1191
+       5    all        LSTM 481   5.4e-05        0.8194       0.8909  0.158        0.8269       0.01351
+      22    all persistence 481 5.614e-05           NaN        1.045 0.2388         1.153           NaN
+      22    all         HAR 481 5.372e-05        0.9569          NaN 0.2072           NaN        0.5409
+      22    all        LSTM 481 4.715e-05        0.8399       0.8778  0.164        0.7916       0.03168
+
+=== test metrics (variance scale; ratio < 1 means better than the reference)
+ horizon regime       model   n      RMSE  RMSE_vs_pers  RMSE_vs_HAR  QLIKE  QLIKE_vs_HAR  DM_SE_pers_p
+       1    all persistence 949 0.0001675           NaN        1.114 0.3052         1.364           NaN
+       1    all         HAR 949 0.0001503        0.8973          NaN 0.2238           NaN        0.5589
+       1    all        LSTM 949 0.0001181        0.7049       0.7856 0.1963        0.8772          0.22
+       5    all persistence 949 0.0001384           NaN        1.136 0.2721         1.367           NaN
+       5    all         HAR 949 0.0001219        0.8806          NaN 0.1991           NaN        0.3302
+       5    all        LSTM 949 9.598e-05        0.6934       0.7874 0.1685        0.8464        0.1637
+      22    all persistence 949 8.806e-05           NaN         1.07  0.219        0.8944           NaN
+      22    all         HAR 949 8.228e-05        0.9344          NaN 0.2449           NaN         0.728
+      22    all        LSTM 949 6.369e-05        0.7233        0.774 0.1734        0.7079        0.2403
+
+All outputs in C:\Users\paulf\Desktop\programming\CentraleSupelec\forecast_combination\LSTM\outputs\full

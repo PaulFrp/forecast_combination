@@ -2,7 +2,9 @@
 
 Forecasts the expected average daily realized variance of SPY (`spy_rv`, 5-minute RV) over the next
 1, 5 and 22 sessions with a small LSTM, using the group's Alpaca snapshot in `data/alpaca/`.
-It is benchmarked against a HAR regression fitted on the same samples and against the persistence baseline.
+It is benchmarked against the group's HAR-RV model (`model_3/`, read from `forecasts/<phase>/har_rv.csv`)
+and against the persistence baseline. Those files must exist before running; regenerate them with
+`python -m model_3.har_rv --phase validation` and `--phase test`.
 
 ```bash
 python LSTM/pipeline.py --mode quick   # ~30 s: tiny untuned LSTM, 1 seed, static fits
@@ -16,15 +18,14 @@ A full run over all horizons also writes the group submissions `forecasts/valida
 | file | step |
 |---|---|
 | `config.py` | every choice: horizons, hyper-parameters, grid, refit frequency, VIX lag |
-| `data_loader.py` | train/validation/test `daily_inputs.csv` on one calendar, schedules, actuals |
+| `data_loader.py` | train/validation/test `daily_inputs.csv` on one calendar, schedules, actuals, model_3 HAR-RV forecasts |
 | `features.py` | 1–2: targets and features |
 | `sequences.py` | 3: train-only scaling, sliding windows, matured-label filtering |
-| `har.py` | 4: HAR baseline (OLS on log HAR components) |
 | `model.py` | 5: 1-layer LSTM, Adam, MSE, early stopping, seed ensemble |
 | `tuning.py` | 6: small random search, validation set only |
 | `forecast.py` | 7: walk-forward (static or expanding) forecasts over a phase's schedule |
 | `export.py` | 8: back to variance, lognormal bias correction, contract CSV (shared validator) |
-| `evaluate.py` | 9: RMSE / QLIKE vs HAR and persistence, Diebold–Mariano, calm vs crisis, seed stability, permutation importance |
+| `evaluate.py` | 9: RMSE / QLIKE vs model_3 HAR-RV and persistence, Diebold–Mariano, calm vs crisis, seed stability, permutation importance |
 | `plots.py` | figures for the slides |
 | `pipeline.py` | runs everything |
 
@@ -50,7 +51,7 @@ A full run over all horizons also writes the group submissions `forecasts/valida
   checked with `pipeline/csv_io.py`. A failed forecast is a blank prediction.
 
 ## Outputs (`outputs/<mode>/`)
-`forecasts/{validation,test}/lstm.csv` and `lstm_har.csv` (the HAR benchmark), `validation.csv` and
-`test_metrics.csv` (RMSE, QLIKE, ratios and DM p-values vs HAR and persistence, by regime),
+`forecasts/{validation,test}/lstm.csv`, `validation.csv` and
+`test_metrics.csv` (RMSE, QLIKE, ratios and DM p-values vs HAR-RV and persistence, by regime),
 `seed_stability.csv`, `feature_importance.csv` (full), `tuning_results.csv` (full), `params.json`,
 `test_detail.csv`, `*.png`.

@@ -22,6 +22,11 @@ PHASE_DIRS = {k: ALPACA_DIR / v for k, v in PHASES.items()}
 # Submission files for the group (only written in full mode).
 FORECASTS_DIR = ROOT_DIR / "forecasts"
 
+# Benchmark: the group's HAR-RV model (model_3/), read from its submissions
+# forecasts/<phase>/har_rv.csv. Regenerate with `python -m model_3.har_rv --phase <phase>`.
+BENCHMARK_ID = "har_rv"
+BENCHMARK_NAME = "HAR"
+
 # --------------------------------------------------------------------------- #
 # Target / forecast contract
 # --------------------------------------------------------------------------- #

@@ -48,6 +48,21 @@ def load_actuals(phase: str) -> pd.DataFrame:
     return a
 
 
+def load_benchmark(phase: str, schedule: pd.DataFrame) -> pd.DataFrame:
+    """model_3's HAR-RV forecasts for a phase: origin_date, horizon, prediction.
+    Checked against the phase schedule by the shared validator."""
+    path = config.FORECASTS_DIR / config.PHASES[phase] / f"{config.BENCHMARK_ID}.csv"
+    if not path.exists():
+        raise FileNotFoundError(f"{path} missing; run `python -m model_3.har_rv "
+                                f"--phase {config.PHASES[phase]}` from the repository root")
+    sched = load(config.PHASE_DIRS[phase] / "forecast_schedule.csv", KEY)
+    b = load(path, FORECAST, schedule=sched)
+    b["origin_date"] = pd.to_datetime(b["origin_date"])
+    b["prediction"] = pd.to_numeric(b["prediction"].replace("", float("nan")))
+    keys = pd.MultiIndex.from_frame(schedule[list(KEY)])
+    return b.set_index(list(KEY)).loc[keys, ["prediction"]].reset_index()
+
+
 def load_all() -> tuple[pd.DataFrame, dict]:
     """Daily inputs on the full calendar, and the phase date ranges."""
     return load_daily(), load_split_dates()
