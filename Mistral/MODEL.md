@@ -5,11 +5,58 @@ Zero-shot SPY realized variance forecasts from `mistralai/Timestral-28M`, checkp
 the inference code and PyTorch version. The run used Python 3.14.5 and CPU inference
 with four PyTorch threads and batches of 16 independent forecast origins.
 
+## Selected submission for forecast combination
+
+Use `timestral_28m_rv_vix_ohlcv_lb_256` for both
+[validation](../forecasts/validation/timestral_28m_rv_vix_ohlcv_lb_256.csv)
+and [test](../forecasts/test/timestral_28m_rv_vix_ohlcv_lb_256.csv).
+This fixed checkpoint takes 256 trading sessions of SPY realized variance,
+SPY OHLCV (open, high, low, close, volume), and the previous session's VIX close.
+The daily quantile-to-mean conversion and horizon averages follow the method
+below. Run from the project root with the pinned dependencies:
+
+```sh
+python -m pip install -r requirements.txt -r Mistral/requirements.txt
+for phase in validation test; do
+  python -m Mistral.run --phase "$phase" --model 28m --variant rv-vix-ohlcv \
+    --lookback 256
+done
+```
+
+We compared 28M and 209M with 256 and 512 sessions, holding the inputs fixed
+across all four runs. With 481 validation origins per horizon, 28M with 256
+sessions had the lowest mean of the three horizon RMSE ratios to persistence
+(86.9%, with 100% meaning a tie). Pooled RMSE was 13.9% lower than persistence
+on validation and 8.8% lower on test. Pooled RMSE takes the square root of the
+mean squared error over all horizon-origin pairs. On the 949 test dates per
+horizon, the selected submission's pooled RMSE was 0.00012342 versus 0.00013538
+for persistence. The 209M run with 256 sessions had lower pooled test RMSE
+(0.00012123) and ranked behind 28M on validation.
+[Validation scores](../reports/timestral_ohlcv_comparison/validation_scores.csv)
+· [Test scores](../reports/timestral_ohlcv_comparison/test_scores.csv)
+
+The 28M and 209M validation forecasts with 512 sessions and the longer 209M
+lookback runs can be reproduced with:
+
+```sh
+python -m Mistral.run --phase validation --model 28m --variant rv-vix-ohlcv \
+  --lookback 512 --output-root reports/timestral_ohlcv_comparison/forecasts
+for lookback in 512 1024 all; do
+  python -m Mistral.run --phase validation --model 209m --variant rv-vix-ohlcv \
+    --lookback "$lookback" --output-root reports/timestral_209m_ohlcv_lookback/forecasts
+done
+```
+
+The 209M forecasts with 256 sessions are in
+[`reports/timestral_209m_lookback/forecasts/`](../reports/timestral_209m_lookback/forecasts).
+The [longer-lookback scores](../reports/timestral_209m_ohlcv_lookback/validation_scores.csv)
+use the same validation origins.
+
 ## Method
 
 - Use the prepared Alpaca snapshot in `data/alpaca/`, with one step per SPY trading
-  session. Take the last 512 sessions through each origin at the 17:00 New York
-  cutoff, carrying history across phase boundaries. `rv` uses `spy_rv` alone.
+  session. Take the configured number of sessions through each origin at the
+  17:00 New York cutoff, carrying history across phase boundaries. `rv` uses `spy_rv` alone.
   `rv-vix` adds the previous trading session's `vix_close` as a past-only covariate.
 - The checkpoint stays fixed. Only the input window advances. Missing input values
   stay masked and the trading calendar stays intact. The runner reserves a blank
@@ -21,16 +68,15 @@ with four PyTorch threads and batches of 16 independent forecast origins.
   above 0.99. This approximates the mean and caps the modeled upper tail at the
   99th percentile. Average the first 1, 5, and 22 daily means. Inputs and outputs
   use unannualized variance units throughout.
-- Compare both variants by the equally weighted mean of the three validation
-  RMSE ratios to persistence, using common dates for both variants and persistence.
-  Use the lower ratio to select one variant for the final test.
+- Compare configurations by the equally weighted mean of the three validation
+  RMSE ratios to persistence, using common dates for every method.
 
 This is a retrospective checkpoint evaluation. The final scheduled test origin
 was October 14, 2026. Mistral released Timestral on October 15, 2026 and describes
 real-data post-training. Exposure to this SPY series and its held-out outcomes is
 unverified. [Timestral technical report](https://arxiv.org/abs/2610.37585)
 
-## Reproduce validation
+## Reproduce the original 512-session validation runs
 
 Run from `forecast_combination/` in a project virtual environment. The first run
 downloads the pinned checkpoint to the Hugging Face cache. Use `--checkpoint`
@@ -50,10 +96,9 @@ python -m pipeline.report --schedule data/alpaca/validation/forecast_schedule.cs
 Lagged VIX reduced validation RMSE at all three horizons. Its mean RMSE ratio
 to persistence was 0.9430 across horizons, versus 0.9551 for realized variance alone.
 
-## Reproduce test
+## Reproduce the original 512-session test run
 
-Use the selected `timestral_28m_rv_vix` submission ID for both phases when
-estimating combination weights and evaluating the combined forecasts.
+The original validation comparison selected `timestral_28m_rv_vix`.
 
 ```sh
 python -m Mistral.run --phase test --variant rv-vix
@@ -93,7 +138,7 @@ Both sizes produced forecasts for all 481 validation origins and 949 test
 origins per horizon. Relative to 28M, 209M increased validation RMSE by 1.0%,
 1.3%, and 2.4% at 1, 5, and 22 sessions. On test, 209M lowered 1-session RMSE
 by 1.7% and increased 5- and 22-session RMSE by 1.2% and 10.7%. The validation
-criterion favors keeping 28M as the main Timestral submission.
+criterion favored 28M in this comparison.
 [Validation comparison](../reports/timestral_209m_validation/report.md)
 · [Test comparison](../reports/timestral_209m_test/report.md)
 
